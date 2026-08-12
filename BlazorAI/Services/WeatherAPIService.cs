@@ -7,7 +7,7 @@ internal class WeatherAPIService(HttpClient httpClient, IConfiguration configura
 {
     public async Task<string> GetWeather(string city)
     {
-        var apiKey = configuration.GetValue<string>("WEATHER_API_KEY");
+        var apiKey = configuration.GetValue<string>("WeatherAPIKey");
         var cityUrl = Uri.EscapeDataString(city);
         var url = $"http://api.weatherapi.com/v1/current.json?key={apiKey}&q={cityUrl}&aqi=no";
         var weatherResponse = await httpClient.GetFromJsonAsync<WeatherResponse>(url);

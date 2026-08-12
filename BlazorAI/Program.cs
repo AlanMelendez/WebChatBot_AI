@@ -1,7 +1,11 @@
 using Anthropic;
+using BlazorAI;
 using BlazorAI.Components;
 using BlazorAI.Services;
 using Microsoft.Extensions.AI;
+using static BlazorAI.Tools;
+using static BlazorAI.Extensions.ServiceExtensions;
+
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -9,21 +13,26 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-builder.Services.AddScoped<IChatbot, FakeChatbot>();
+builder.Services.AddCommonServices();
+
+
+builder.Services.AddScoped<IChatbot, RealChatBot>();
 
 builder.Services.AddChatClient(sp =>
 {
+
+
     var configuration = sp.GetRequiredService<IConfiguration>();
     var provider = "openai";
-    var model = configuration.GetValue<string>("ChatClient:Model") ?? "gpt-5.4-nano";
+    var model = "gpt-5.4-nano";
 
-    var openAiApiKey = configuration.GetValue<string>("ChatClient:OpenAI:ApiKey");
+    var openAiApiKey = configuration.GetValue<string>("OPENAIKEY");
     var claudeKey = configuration.GetValue<string>("ChatClient:Anthropic:ApiKey");
 
     IChatClient client = provider switch
     {
-        "openai" => (IChatClient)new OpenAI.Chat.ChatClient(openAiApiKey, model),
-        "claude" => (IChatClient)new AnthropicClient() { ApiKey = claudeKey }
+        "openai" => new OpenAI.Chat.ChatClient(model,openAiApiKey).AsIChatClient(),
+        "claude" => new AnthropicClient() { ApiKey = claudeKey }
             .AsIChatClient()
             .AsBuilder()
             .ConfigureOptions(chat => chat.ModelId = model ?? "claude-haiku-5")
@@ -38,6 +47,7 @@ builder.Services.AddChatClient(sp =>
             {
                 opt.MaxOutputTokens = 2000;
                 opt.Temperature = 0.7f;
+                opt.Tools = [.. Tools.GetTools(sp)];
             }
         ).UseFunctionInvocation(null, c => c.IncludeDetailedErrors = true)
         .Build(sp);
@@ -45,6 +55,7 @@ builder.Services.AddChatClient(sp =>
 
     ;
 });
+
 
 var app = builder.Build();
 
