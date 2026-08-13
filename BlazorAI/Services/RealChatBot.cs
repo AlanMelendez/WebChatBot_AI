@@ -52,15 +52,18 @@ namespace BlazorAI.Services
 
             _messages.Add(new ChatMessage(ChatRole.User, [approvalResponse])); // Add the user's response to the approval request to the conversation history for AI processing.
 
-            PendingApproval = null; // Clear the pending approval request since it has been resolved.
 
             Conversation.Add(new ChatMessageUI { Role = DTOs.MessageRole.User, Text = approved ? "Action approved by the user" : "Action denied by the user" }); // Add the user's response to the approval request to the conversation history for UI display.
         
             Conversation.Add(new ChatMessageUI { Role = DTOs.MessageRole.AI, Text = string.Empty }); // Add a placeholder message to indicate that the AI is processing the user's response to the approval request.
 
+            PendingApproval = null; // Clear the pending approval request since it has been resolved.
+
             NotifyStateChange(); // Notify subscribers that the state has changed, prompting a UI update.
 
             await SendMessagesToTheAssistant(cancellationToken); // Send the conversation messages to the AI model and process the response.
+             
+            IsProcessing = false;
         }
 
         public async Task SendMessageAsync(string userText, CancellationToken cancellationToken = default)
@@ -133,6 +136,16 @@ namespace BlazorAI.Services
                 }
                 NotifyStateChange();
                 return;
+            }
+            else
+            {
+                // If there is no approval request, update the last AI message with the final response text.
+                var finalResponseText = string.Join("", response.Messages
+                    .SelectMany(m => m.Contents)
+                    .OfType<TextContent>()
+                    .Select(tc => tc.Text));
+                Conversation[^1].Text = finalResponseText; // Update the last AI message with the final response text for UI display.
+                NotifyStateChange(); // Notify subscribers that the state has changed, prompting a UI update.
             }
 
         }
