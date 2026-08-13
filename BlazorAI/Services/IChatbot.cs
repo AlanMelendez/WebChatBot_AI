@@ -2,7 +2,7 @@ using BlazorAI.DTOs;
 
 namespace BlazorAI.Services;
 
-public interface IChatbot
+public interface IChatbot 
 {
     List<ChatMessageUI> Conversation { get; }
     bool IsProcessing { get; }
@@ -12,4 +12,6 @@ public interface IChatbot
     void CancelCurrentResponse();
     Task SendMessageAsync(string userText, CancellationToken cancellationToken = default);
     Task ResolveApprovalAsync(bool approved, CancellationToken cancellationToken = default);
+
+    ApprovalRequestUI? PendingApproval { get; }
 }

@@ -8,6 +8,7 @@ public class FakeChatbot : IChatbot
 
     public bool IsProcessing => false;
 
+    public ApprovalRequestUI? PendingApproval { get; private set; }
     public event Action? OnChange;
 
     public void CancelCurrentResponse()

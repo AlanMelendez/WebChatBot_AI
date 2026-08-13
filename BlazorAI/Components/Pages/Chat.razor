@@ -14,6 +14,41 @@
                 <div class="message-body">@message.Text</div>
             </div>
         }
+
+
+        @if (chatbot.PendingApproval is not null)
+        {
+            <div class="approval-tool">
+                <h4>The AI wants to execute a sensitive action</h4>
+                <p><strong>Tool:</strong> @chatbot.PendingApproval.ToolName</p>
+
+                @if (chatbot.PendingApproval.Arguments.Count > 0)
+                {
+                    <ul>
+                        @foreach (var argument in chatbot.PendingApproval.Arguments)
+                        {
+                            <li><strong>@argument.Key:</strong> @argument.Value</li>
+                        }
+                    </ul>
+                }
+
+                <div class="approval-actions">
+                    <button class="btn btn-success"
+                            @onclick="Approve"
+                            disabled="@chatbot.IsProcessing">
+                        Approve
+                    </button>
+
+                    <button class="btn btn-danger"
+                            @onclick="Reject"
+                            disabled="@chatbot.IsProcessing">
+                        Reject
+                    </button>
+                </div>
+            </div>
+        }
+
+        
     </div>
 
     <EditForm Model="inputModel" OnValidSubmit="Send">
@@ -46,6 +81,7 @@
 
     private bool DisableSend =>
         chatbot.IsProcessing ||
+        chatbot.PendingApproval is not null ||
         string.IsNullOrWhiteSpace(inputModel.Text);
 
     protected override void OnInitialized()
@@ -66,6 +102,18 @@
         needsScroll = true;
 
         await chatbot.SendMessageAsync(text);
+    }
+
+    private async Task Approve()
+    {
+        needsScroll = true;
+        await chatbot.ResolveApprovalAsync(true);
+    }
+
+    private async Task Reject()
+    {
+        needsScroll = true;
+        await chatbot.ResolveApprovalAsync(false);
     }
    
     private Task Cancel()

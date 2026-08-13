@@ -3,6 +3,8 @@ using Microsoft.Extensions.AI;
 
 namespace BlazorAI.Services
 {
+
+    
     public class RealChatBot : IChatbot
     {
         private readonly IChatClient _chatClient; // The chat client used to send and receive messages from the AI model.
@@ -28,9 +30,9 @@ namespace BlazorAI.Services
 
 
 
-
-
         public bool IsProcessing { get; private set; }
+
+        public ApprovalRequestUI? PendingApproval { get; private set; }
 
         public event Action? OnChange;
 
@@ -39,16 +41,33 @@ namespace BlazorAI.Services
             throw new NotImplementedException();
         }
 
-        public Task ResolveApprovalAsync(bool approved, CancellationToken cancellationToken = default)
+        public async Task ResolveApprovalAsync(bool approved, CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException();
+            if (IsProcessing || PendingApproval is null) return;
+
+
+            IsProcessing = true;
+
+            var approvalResponse = PendingApproval.ApprovalRequestContent.CreateResponse(approved); // Create a response to the approval request based on whether the user approved or denied it.
+
+            _messages.Add(new ChatMessage(ChatRole.User, [approvalResponse])); // Add the user's response to the approval request to the conversation history for AI processing.
+
+            PendingApproval = null; // Clear the pending approval request since it has been resolved.
+
+            Conversation.Add(new ChatMessageUI { Role = DTOs.MessageRole.User, Text = approved ? "Action approved by the user" : "Action denied by the user" }); // Add the user's response to the approval request to the conversation history for UI display.
+        
+            Conversation.Add(new ChatMessageUI { Role = DTOs.MessageRole.AI, Text = string.Empty }); // Add a placeholder message to indicate that the AI is processing the user's response to the approval request.
+
+            NotifyStateChange(); // Notify subscribers that the state has changed, prompting a UI update.
+
+            await SendMessagesToTheAssistant(cancellationToken); // Send the conversation messages to the AI model and process the response.
         }
 
         public async Task SendMessageAsync(string userText, CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrEmpty(userText)) return;
 
-            if (IsProcessing) return;
+            if (IsProcessing || PendingApproval != null) return;
 
             IsProcessing = true;
 
@@ -84,6 +103,47 @@ namespace BlazorAI.Services
 
             var response = updates.ToChatResponse(); // Convert the list of updates to a single chat response for processing.
             _messages.AddMessages(response);
+
+
+
+            var approvalRequest = response.Messages
+                .SelectMany(m => m.Contents)
+                .OfType<ToolApprovalRequestContent>()
+                .FirstOrDefault(); // Check if the AI's response contains a tool approval request.
+
+            if (approvalRequest != null)
+            {
+                if (approvalRequest.ToolCall is FunctionCallContent functionCalL) // Check if the tool approval request is a function call.
+                {
+
+                    // Create a new approval request UI object with the tool approval request details for UI display.
+                    PendingApproval = new ApprovalRequestUI
+                    {
+                        ApprovalRequestContent = approvalRequest,
+                        ToolName = ConvertToolName(functionCalL.Name),
+                        Arguments = functionCalL?.Arguments?.ToDictionary(x => x.Key, x => x.Value) ?? [] //
+                    }; 
+                }
+
+
+                //Remove the empty AI message that was added as a placeholder for the approval request.
+                if(string.IsNullOrWhiteSpace(Conversation[^1].Text))
+                {
+                    Conversation.RemoveAt(Conversation.Count - 1);
+                }
+                NotifyStateChange();
+                return;
+            }
+
+        }
+
+        private static string ConvertToolName(string toolName)
+        {
+            return toolName switch
+            {
+                "SendEmail" => "Send email",
+                _ => toolName
+            };
         }
 
         private void NotifyStateChange() => OnChange?.Invoke(); // Notify subscribers that the state has changed, prompting a UI update.
