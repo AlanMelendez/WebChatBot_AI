@@ -35,8 +35,8 @@ namespace BlazorAI
             var sendEmailTool = AIFunctionFactory.Create(sendEmailService.SendEmail);
             yield return new ApprovalRequiredAIFunction(sendEmailTool);
 
-            //var peopleService = sp.GetRequiredService<IPersonService>();
-            //yield return AIFunctionFactory.Create(peopleService.GetAll);
+            var peopleService = sp.GetRequiredService<IPersonService>();
+            yield return AIFunctionFactory.Create(peopleService.GetAll);
         }
     }
 }

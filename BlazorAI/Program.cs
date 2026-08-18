@@ -5,6 +5,8 @@ using BlazorAI.Services;
 using Microsoft.Extensions.AI;
 using static BlazorAI.Tools;
 using static BlazorAI.Extensions.ServiceExtensions;
+using BlazorAI.Data;
+using Microsoft.EntityFrameworkCore;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -14,6 +16,8 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
 builder.Services.AddCommonServices();
+
+builder.Services.AddDbContextFactory<ApplicationDbContext>(options => options.UseSqlite("Data Source=mydb.db"));
 
 
 builder.Services.AddScoped<IChatbot, RealChatBot>();

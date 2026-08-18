@@ -12,6 +12,7 @@ namespace BlazorAI.Extensions
             services.AddSingleton<EvaluateWeatherConditions>();
             services.AddSingleton<FakeGetEmailService>();
             services.AddSingleton<FakeSendEmailService>();
+            services.AddScoped<IPersonService, PeopleService>();
 
 
 
