@@ -11,10 +11,12 @@ namespace BlazorAI.Services
         private readonly List<ChatMessage> _messages = []; // A list to store the conversation messages exchanged with the AI model.
         public List<ChatMessageUI> Conversation { get; } = []; // A list to store the conversation messages in a format suitable for UI display.
 
+        private readonly ChatOptions _chatOptions; // The chat options used to configure the behavior of the AI model.
 
-        public RealChatBot(IChatClient chatClient)
+        public RealChatBot(IChatClient chatClient, ChatOptions chatOptions)
         {
            this._chatClient = chatClient;
+           this._chatOptions = chatOptions;
 
 
             var systemPrompt = """
@@ -86,7 +88,7 @@ namespace BlazorAI.Services
         {
             var updates = new List<ChatResponseUpdate>(); // A list to store updates to the conversation messages for UI display.
 
-            await foreach (var update in _chatClient.GetStreamingResponseAsync(_messages, cancellationToken: cancellationToken))
+            await foreach (var update in _chatClient.GetStreamingResponseAsync(_messages,_chatOptions, cancellationToken: cancellationToken))
             {
                 updates.Add(update);
 

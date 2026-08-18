@@ -42,18 +42,18 @@ builder.Services.AddChatClient(sp =>
 
     return client
         .AsBuilder()
-        .ConfigureOptions(
-            opt =>
-            {
-                opt.MaxOutputTokens = 2000;
-                opt.Temperature = 0.7f;
-                opt.Tools = [.. Tools.GetTools(sp)];
-            }
-        ).UseFunctionInvocation(null, c => c.IncludeDetailedErrors = true)
+        .UseFunctionInvocation(null, c => c.IncludeDetailedErrors = true)
         .Build(sp);
 
 
     ;
+});
+
+builder.Services.AddTransient<ChatOptions>(sp => new ChatOptions
+{
+    MaxOutputTokens = 2000,
+    Temperature = 0.7f,
+    Tools = [.. Tools.GetTools(sp)]
 });
 
 
