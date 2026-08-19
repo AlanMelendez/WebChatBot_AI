@@ -11,7 +11,24 @@
         {
             <div class="message @GetCssClass(message.Role)">
                 <div class="message-header">@GetLabel(message.Role)</div>
-                <div class="message-body">@message.Text</div>
+                <div class="message-body">
+
+                    @if (string.IsNullOrEmpty(@message.Text))
+                    {
+                        <div class="typing-indicator">
+                            <div class="typing-dots" aria-label="The assistant is writing" role="status">
+                                <span></span>
+                                <span></span>
+                                <span></span>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        @message.Text
+                    }
+
+                </div>
             </div>
         }
 
