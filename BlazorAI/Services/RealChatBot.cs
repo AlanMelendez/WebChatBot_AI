@@ -7,6 +7,7 @@ namespace BlazorAI.Services
     
     public class RealChatBot : IChatbot
     {
+        private  CancellationTokenSource cancellation;
         private readonly IChatClient _chatClient; // The chat client used to send and receive messages from the AI model.
         private readonly List<ChatMessage> _messages = []; // A list to store the conversation messages exchanged with the AI model.
         public List<ChatMessageUI> Conversation { get; } = []; // A list to store the conversation messages in a format suitable for UI display.
@@ -42,47 +43,87 @@ namespace BlazorAI.Services
 
         public void CancelCurrentResponse()
         {
-            throw new NotImplementedException();
+            if (IsProcessing)
+            {
+                cancellation.Cancel();
+
+            }
         }
 
         public async Task ResolveApprovalAsync(bool approved, CancellationToken cancellationToken = default)
         {
             if (IsProcessing || PendingApproval is null) return;
 
-
-            IsProcessing = true;
-
-            var approvalResponse = PendingApproval.ApprovalRequestContent.CreateResponse(approved); // Create a response to the approval request based on whether the user approved or denied it.
-
-            _messages.Add(new ChatMessage(ChatRole.User, [approvalResponse])); // Add the user's response to the approval request to the conversation history for AI processing.
-
-
-            Conversation.Add(new ChatMessageUI { Role = DTOs.MessageRole.System, Text = approved ? "Action approved by the user" : "Action denied by the user" }); // Add the user's response to the approval request to the conversation history for UI display.
-        
-            
-            DisplayNextUserApproval(); // Display the next pending approval request, if any, to the user for approval or denial.
-
-            if(PendingApproval is not null)
+            try
             {
-                //Exist other pending approval. We need execute again the SendMessagesToTheAssistant to process the next approval request.
 
-                IsProcessing = false;
-                NotifyStateChange();
-                return; 
+                IsProcessing = true;
+
+                cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken); // Create a linked cancellation token source to allow for cancellation of the approval resolution process.
+
+                var approvalResponse = PendingApproval.ApprovalRequestContent.CreateResponse(approved); // Create a response to the approval request based on whether the user approved or denied it.
+
+                _messages.Add(new ChatMessage(ChatRole.User, [approvalResponse])); // Add the user's response to the approval request to the conversation history for AI processing.
+
+
+                Conversation.Add(new ChatMessageUI { Role = DTOs.MessageRole.System, Text = approved ? "Action approved by the user" : "Action denied by the user" }); // Add the user's response to the approval request to the conversation history for UI display.
+
+
+                DisplayNextUserApproval(); // Display the next pending approval request, if any, to the user for approval or denial.
+
+                if (PendingApproval is not null)
+                {
+                    //Exist other pending approval. We need execute again the SendMessagesToTheAssistant to process the next approval request.
+
+                    IsProcessing = false;
+                    NotifyStateChange();
+                    return;
+                }
+
+                Conversation.Add(new ChatMessageUI { Role = DTOs.MessageRole.AI, Text = string.Empty }); // Add a placeholder message to indicate that the AI is processing the user's response to the approval request.
+
+                PendingApproval = null; // Clear the pending approval request since it has been resolved.
+
+                NotifyStateChange(); // Notify subscribers that the state has changed, prompting a UI update.
+
+                await SendMessagesToTheAssistant(cancellation.Token); // Send the conversation messages to the AI model and process the response.
+
+            }
+            catch (OperationCanceledException ex)
+            {
+                HandleOperationCanceled();
+            }
+            finally
+            {
+                HandleFinally();
             }
 
+        }
+        private void HandleOperationCanceled()
+        {
+            if(Conversation.Count > 0 && Conversation[^1].Role == DTOs.MessageRole.AI)
+            {
 
+                if(string.IsNullOrWhiteSpace(Conversation[^1].Text))
+                {
+                    Conversation[^1].Text = "[Canceled response]";
+                }
+                else
+                {
+                    Conversation[^1].Text = "[canceled]";
 
-            
-            Conversation.Add(new ChatMessageUI { Role = DTOs.MessageRole.AI, Text = string.Empty }); // Add a placeholder message to indicate that the AI is processing the user's response to the approval request.
+                }
+            }
 
-            PendingApproval = null; // Clear the pending approval request since it has been resolved.
+        }
 
-            NotifyStateChange(); // Notify subscribers that the state has changed, prompting a UI update.
-
-            await SendMessagesToTheAssistant(cancellationToken); // Send the conversation messages to the AI model and process the response.
-             
+        private void HandleFinally()
+        {
             IsProcessing = false;
+            cancellation?.Dispose();
+            cancellation = null;
+
+            NotifyStateChange();
         }
 
         private void DisplayNextUserApproval()
@@ -113,17 +154,27 @@ namespace BlazorAI.Services
         public async Task SendMessageAsync(string userText, CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrEmpty(userText)) return;
-
             if (IsProcessing || PendingApproval != null) return;
 
-            IsProcessing = true;
+            try
+            {
+                IsProcessing = true;
 
-            Conversation.Add(new ChatMessageUI { Role = DTOs.MessageRole.User, Text = userText }); // Add the user's message to the conversation history for UI display.
-            _messages.Add(new ChatMessage(ChatRole.User, userText)); // Add the user's message to the conversation history for AI processing.
-            Conversation.Add(new ChatMessageUI { Role = DTOs.MessageRole.AI, Text = string.Empty }); // Add a placeholder message to indicate that the AI is processing the user's input.
+                Conversation.Add(new ChatMessageUI { Role = DTOs.MessageRole.User, Text = userText }); // Add the user's message to the conversation history for UI display.
+                _messages.Add(new ChatMessage(ChatRole.User, userText)); // Add the user's message to the conversation history for AI processing.
+                Conversation.Add(new ChatMessageUI { Role = DTOs.MessageRole.AI, Text = string.Empty }); // Add a placeholder message to indicate that the AI is processing the user's input.
 
-            await SendMessagesToTheAssistant(cancellationToken); // Send the conversation messages to the AI model and process the response.
-            IsProcessing = false;
+                await SendMessagesToTheAssistant(cancellationToken); // Send the conversation messages to the AI model and process the response.
+            }
+            catch (OperationCanceledException ex)
+            {
+                HandleOperationCanceled();
+            }
+            finally
+            {
+                HandleFinally();
+            }
+           
         }
          
         private async Task SendMessagesToTheAssistant(CancellationToken cancellationToken = default)
