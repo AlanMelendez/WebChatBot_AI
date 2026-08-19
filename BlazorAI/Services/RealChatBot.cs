@@ -13,6 +13,8 @@ namespace BlazorAI.Services
 
         private readonly ChatOptions _chatOptions; // The chat options used to configure the behavior of the AI model.
 
+        private readonly Queue<ToolApprovalRequestContent> pendingApprovals = new();
+
         public RealChatBot(IChatClient chatClient, ChatOptions chatOptions)
         {
            this._chatClient = chatClient;
@@ -55,8 +57,23 @@ namespace BlazorAI.Services
             _messages.Add(new ChatMessage(ChatRole.User, [approvalResponse])); // Add the user's response to the approval request to the conversation history for AI processing.
 
 
-            Conversation.Add(new ChatMessageUI { Role = DTOs.MessageRole.User, Text = approved ? "Action approved by the user" : "Action denied by the user" }); // Add the user's response to the approval request to the conversation history for UI display.
+            Conversation.Add(new ChatMessageUI { Role = DTOs.MessageRole.System, Text = approved ? "Action approved by the user" : "Action denied by the user" }); // Add the user's response to the approval request to the conversation history for UI display.
         
+            
+            DisplayNextUserApproval(); // Display the next pending approval request, if any, to the user for approval or denial.
+
+            if(PendingApproval is not null)
+            {
+                //Exist other pending approval. We need execute again the SendMessagesToTheAssistant to process the next approval request.
+
+                IsProcessing = false;
+                NotifyStateChange();
+                return; 
+            }
+
+
+
+            
             Conversation.Add(new ChatMessageUI { Role = DTOs.MessageRole.AI, Text = string.Empty }); // Add a placeholder message to indicate that the AI is processing the user's response to the approval request.
 
             PendingApproval = null; // Clear the pending approval request since it has been resolved.
@@ -66,6 +83,31 @@ namespace BlazorAI.Services
             await SendMessagesToTheAssistant(cancellationToken); // Send the conversation messages to the AI model and process the response.
              
             IsProcessing = false;
+        }
+
+        private void DisplayNextUserApproval()
+        {
+            if (pendingApprovals.Count == 0)
+            {
+                PendingApproval = null;
+                return;
+            }
+
+            var approvalRequest = pendingApprovals.Dequeue(); // Get the next approval request from the queue.
+
+            if (approvalRequest.ToolCall is FunctionCallContent functionCalL) // Check if the tool approval request is a function call.
+            {
+
+                // Create a new approval request UI object with the tool approval request details for UI display.
+                PendingApproval = new ApprovalRequestUI
+                {
+                    ApprovalRequestContent = approvalRequest,
+                    ToolName = ConvertToolName(functionCalL.Name),
+                    Arguments = functionCalL?.Arguments?.ToDictionary(x => x.Key, x => x.Value) ?? [] //
+                };
+            }
+
+
         }
 
         public async Task SendMessageAsync(string userText, CancellationToken cancellationToken = default)
@@ -111,44 +153,40 @@ namespace BlazorAI.Services
 
 
 
-            var approvalRequest = response.Messages
+            var approvalRequests = response.Messages
                 .SelectMany(m => m.Contents)
                 .OfType<ToolApprovalRequestContent>()
-                .FirstOrDefault(); // Check if the AI's response contains a tool approval request.
+                .ToList(); // Check if the AI's response contains a tool approval request.
 
-            if (approvalRequest != null)
+            if (approvalRequests.Count > 0)
             {
-                if (approvalRequest.ToolCall is FunctionCallContent functionCalL) // Check if the tool approval request is a function call.
-                {
 
-                    // Create a new approval request UI object with the tool approval request details for UI display.
-                    PendingApproval = new ApprovalRequestUI
-                    {
-                        ApprovalRequestContent = approvalRequest,
-                        ToolName = ConvertToolName(functionCalL.Name),
-                        Arguments = functionCalL?.Arguments?.ToDictionary(x => x.Key, x => x.Value) ?? [] //
-                    }; 
+                 foreach(var approvalRequest in approvalRequests)
+                {
+                    pendingApprovals.Enqueue(approvalRequest); // Add the tool approval request to the queue of pending approvals for processing.
                 }
 
 
                 //Remove the empty AI message that was added as a placeholder for the approval request.
-                if(string.IsNullOrWhiteSpace(Conversation[^1].Text))
+                if (string.IsNullOrWhiteSpace(Conversation[^1].Text))
                 {
                     Conversation.RemoveAt(Conversation.Count - 1);
                 }
+
+                DisplayNextUserApproval(); // Display the next pending approval request, if any, to the user for approval or denial.
                 NotifyStateChange();
                 return;
+
+
             }
-            else
-            {
                 // If there is no approval request, update the last AI message with the final response text.
-                var finalResponseText = string.Join("", response.Messages
-                    .SelectMany(m => m.Contents)
-                    .OfType<TextContent>()
-                    .Select(tc => tc.Text));
-                Conversation[^1].Text = finalResponseText; // Update the last AI message with the final response text for UI display.
-                NotifyStateChange(); // Notify subscribers that the state has changed, prompting a UI update.
-            }
+                //var finalResponseText = string.Join("", response.Messages
+                //    .SelectMany(m => m.Contents)
+                //    .OfType<TextContent>()
+                //    .Select(tc => tc.Text));
+                //Conversation[^1].Text = finalResponseText; // Update the last AI message with the final response text for UI display.
+                //NotifyStateChange(); // Notify subscribers that the state has changed, prompting a UI update.
+           
 
         }
 

@@ -13,11 +13,6 @@ namespace BlazorAI.Extensions
             services.AddSingleton<FakeGetEmailService>();
             services.AddSingleton<FakeSendEmailService>();
             services.AddScoped<IPersonService, PeopleService>();
-
-
-
-
-
             return services;
         }
     }
