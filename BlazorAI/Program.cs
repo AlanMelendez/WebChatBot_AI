@@ -7,6 +7,7 @@ using static BlazorAI.Tools;
 using static BlazorAI.Extensions.ServiceExtensions;
 using BlazorAI.Data;
 using Microsoft.EntityFrameworkCore;
+using BlazorAI.Services.RAG;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -19,8 +20,6 @@ builder.Services.AddCommonServices();
 
 builder.Services.AddDbContextFactory<ApplicationDbContext>(options => options.UseSqlite("Data Source=mydb.db"));
 
-
-builder.Services.AddScoped<IChatbot, RealChatBot>();
 
 builder.Services.AddChatClient(sp =>
 {

@@ -11,11 +11,11 @@ namespace BlazorAI.Services.RAG
                 {
                     Title = "Vacation Policy",
                     Content = """
-            Every employee is entitled to 14 working days of vacation after completing one year at the company.
-            The request must be submitted at least 15 days in advance.
-            The direct manager must approve the request before it is taken.
-            Vacation cannot be split into blocks smaller than 2 days, unless specially approved by Human Resources.
-            """
+                    Every employee is entitled to 14 working days of vacation after completing one year at the company.
+                    The request must be submitted at least 15 days in advance.
+                    The direct manager must approve the request before it is taken.
+                    Vacation cannot be split into blocks smaller than 2 days, unless specially approved by Human Resources.
+                    """
                 },
         new Document
         {

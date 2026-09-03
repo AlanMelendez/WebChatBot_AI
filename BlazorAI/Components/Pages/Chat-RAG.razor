@@ -1,9 +1,9 @@
-﻿@page "/"
+﻿@page "/chat-rag"
 @implements IDisposable
 @inject IJSRuntime JS
 
 <div class="chat-wrapper">
-    <h3 class="chat-title">AI Chat</h3>
+    <h3 class="chat-title">Ask anything about our documentation</h3>
 
     <div class="chat-messages" @ref="messageContainer">
         @foreach (var message in chatbot.Conversation)
@@ -26,7 +26,6 @@
                     {
                         @message.Text
                     }
-
                 </div>
             </div>
         }
@@ -92,8 +91,9 @@
 
 @code {
 
-    [Inject(Key = "chat")]
+    [Inject(Key = "chat-rag")]
     public IChatbot chatbot { get; set; } = null!;
+
 
     private readonly ChatInputModel inputModel = new();
     private ElementReference messageContainer;
@@ -135,7 +135,6 @@
         needsScroll = true;
         await chatbot.ResolveApprovalAsync(false);
     }
-   
     private Task Cancel()
     {
         chatbot.CancelCurrentResponse();
