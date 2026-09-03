@@ -18,6 +18,7 @@ The application uses Blazor Interactive Server rendering and `Microsoft.Extensio
 - People lookup tool backed by the `People` table.
 - Cancellation of an in-progress assistant response.
 - Approval and rejection of sensitive tool calls from the chat UI.
+- An initial in-memory Retrieval-Augmented Generation (RAG) service for searching company documents.
 
 > This is a demonstration project. The email services are intentionally fake and write to the console instead of sending real email.
 
@@ -32,6 +33,7 @@ The application uses Blazor Interactive Server rendering and `Microsoft.Extensio
 | AI providers | OpenAI and Anthropic client integrations |
 | OpenAI integration | `Microsoft.Extensions.AI.OpenAI` 10.9.0 |
 | Anthropic integration | `Anthropic` 12.40.0 |
+| Vector search | `CommunityToolkit.VectorData.InMemory` 1.0.1 |
 | Database | SQLite |
 | ORM | Entity Framework Core 10.0.11 |
 | Styling | Bootstrap assets and application CSS |
@@ -128,6 +130,49 @@ The send-email tool is wrapped in `ApprovalRequiredAIFunction`. When the model r
 
 Responses are streamed through `IChatClient.GetStreamingResponseAsync`. The Blazor page updates as text arrives and automatically scrolls to the newest message. A user can cancel an active response with the **Cancel** button.
 
+## RAG document search
+
+The staged RAG changes add a first document-search implementation. RAG means **Retrieval-Augmented Generation**. In simple terms, the application finds useful document text before the AI creates an answer.
+
+The current implementation is a demonstration. It uses documents stored in memory and an in-memory vector store. It does not yet connect the search results to the chat response.
+
+### RAG flow, step by step
+
+1. `DocumentsFromMemoryService` creates a small list of company documents. The current examples are vacation policy, remote work, equipment requests, and technical support.
+2. `Initialize` runs the first time `FindRelevantContext` is called. If initialization already finished, `_isInitialized` stops the documents from being processed again.
+3. The service makes sure that the in-memory vector collection named `documents` exists.
+4. Each document is split into smaller pieces. The current maximum size is 1,000 characters.
+5. The splitter removes empty lines, treats each remaining line as a paragraph, and combines paragraphs while they fit in the current chunk.
+6. When the next paragraph would make a chunk too long, the current chunk is saved. The paragraph that did not fit starts the next chunk, so no paragraph is lost.
+7. An embedding generator changes every chunk into a list of numbers. These numbers describe the meaning of the text and allow similar text to be found.
+8. Each chunk and its embedding are saved as a `VectorDocumentFragment` in the in-memory vector store. Each fragment contains a new ID, the document title, the chunk text, and its embedding.
+9. After all documents are loaded, `_isInitialized` is set to `true`.
+10. For a user query, `FindRelevantContext` creates an embedding for the query.
+11. The vector store compares the query embedding with the stored embeddings using cosine similarity.
+12. The service returns up to `topK` matching fragments. The default value is three results, and each result includes the document title and text.
+
+### Important RAG files
+
+| File | Purpose |
+| --- | --- |
+| `BlazorAI/DTOs/Document.cs` | Represents a document with a title and content. |
+| `BlazorAI/DTOs/VectorDocumentFragment.cs` | Defines the data and embedding stored for one document chunk. |
+| `BlazorAI/Services/RAG/DocumentsFromMemoryService.cs` | Provides the sample company documents. |
+| `BlazorAI/Services/RAG/IRAGSetvice.cs` | Defines the `IRAGService` search contract. |
+| `BlazorAI/Services/RAG/FakeRAGService.cs` | Splits documents, creates embeddings, stores fragments, and searches them. |
+
+### How chunking works
+
+The chunking method keeps one chunk in the `current` variable:
+
+1. It reads the next paragraph.
+2. It creates a temporary `candidate` by adding that paragraph to `current`.
+3. If the candidate fits, it becomes the new `current` chunk.
+4. If it is too long, the old `current` chunk is saved and the new paragraph becomes the next `current` chunk.
+5. After the loop, the final `current` chunk is saved.
+
+This keeps paragraphs together when possible. A single paragraph longer than 1,000 characters is not split by the current implementation, so that paragraph can still produce an oversized chunk.
+
 ## Data and Entity Framework Core
 
 The application uses SQLite with the connection string configured directly in `Program.cs`:
@@ -173,6 +218,10 @@ dotnet ef migrations add <MigrationName> --project .\BlazorAI\BlazorAI.csproj
 	│   ├── RealChatBot.cs
 	│   ├── WeatherAPIService.cs
 	│   ├── PeopleService.cs
+	│   ├── RAG
+	│   │   ├── DocumentsFromMemoryService.cs
+	│   │   ├── FakeRAGService.cs
+	│   │   └── IRAGSetvice.cs
 	│   └── Fake*Service.cs
 	├── Tools.cs
 	├── Program.cs
