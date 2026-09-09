@@ -121,8 +121,15 @@ namespace BlazorAI.Services.RAG
         private async Task SendMessagesToTheAssistant(string userPrompt,CancellationToken cancellationToken = default)
         {
 
-            var context = await _ragService.FindRelevantContext(userPrompt, 3, cancellationToken); // Find relevant context for the user's input using the RAG service.
+            var context = await _ragService.FindRelevantContext(userPrompt, 3, 0.6f, cancellationToken); // Find relevant context for the user's input using the RAG service.
 
+
+            if(context.Count == 0)
+            {
+                Conversation[^1].Text = "I do not have sufficient information in the documents to answer that question."; // If no relevant context is found, respond with a message indicating that there is insufficient information to answer the question.
+                NotifyStateChange(); // Notify subscribers that the state has changed, prompting a UI update.
+                return;
+            }
 
              /* messageContext structure:
 
@@ -142,6 +149,12 @@ namespace BlazorAI.Services.RAG
 
                 Context recovered from the documents:
                 {{string.Join("\n\n---\n\n", context)}}
+
+                Question from the user: {{userPrompt}}
+
+                Instructions:
+                - Answer only with information contained in the retrieved context.
+                - If the answer is not explicitly in the context, you must respond: "I do not have sufficient information in the documents to answer that question."
 
 
             """); // Create a system message containing the relevant context for the AI model.

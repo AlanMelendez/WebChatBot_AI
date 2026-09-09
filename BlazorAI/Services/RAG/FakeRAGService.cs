@@ -24,7 +24,7 @@ namespace BlazorAI.Services.RAG
             _vectorStore = vectorStore.GetCollection<Guid, VectorDocumentFragment>("documents");
         }
 
-        public async Task<List<string>> FindRelevantContext(string prompt, int topK = 3, CancellationToken cancellationToken = default)
+        public async Task<List<string>> FindRelevantContext(string prompt, int topK = 3, float minScore = 0.6f, CancellationToken cancellationToken = default)
         {
             await Initialize(cancellationToken);
 
@@ -35,6 +35,8 @@ namespace BlazorAI.Services.RAG
 
 
             await  foreach (var document in _vectorStore.SearchAsync(promptEmbedding, topK, null, cancellationToken)) {
+
+                if (document.Score < minScore) continue;
 
                 results.Add($"""
 
